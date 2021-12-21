@@ -120,6 +120,8 @@ void OrderBook::insertOrder(OrderBookEntry& order)
 
 std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::string product, std::string timestamp)
 {
+    // create a vector of sale orders given all asks and bids for the given product at the given timestamp
+
 // asks = orderbook.asks
     std::vector<OrderBookEntry> asks = getOrders(OrderBookType::ask, 
                                                  product, 
@@ -144,6 +146,12 @@ std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::string product, std:
     std::sort(asks.begin(), asks.end(), OrderBookEntry::compareByPriceAsc);
     // sort bids highest first
     std::sort(bids.begin(), bids.end(), OrderBookEntry::compareByPriceDesc);
+    
+    //store bids in FIFO queue
+    queue<OrderBookEntry> bids_queue;
+    for (const auto& e: bids)
+        bids_queue.push(e);
+
     // for ask in asks:
     std::cout << "max ask " << asks[asks.size()-1].price << std::endl;
     std::cout << "min ask " << asks[0].price << std::endl;
@@ -152,14 +160,11 @@ std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::string product, std:
     
     for (OrderBookEntry& ask : asks)
     {
-    //     for bid in bids:
-        for (OrderBookEntry& bid : bids)
-        {
-    //         if bid.price >= ask.price # we have a match
+        
+        while (bids_queue.size() > 0){
+            OrderBookEntry& bid = bids_queue.front();
             if (bid.price >= ask.price)
             {
-    //             sale = new order()
-    //             sale.price = ask.price
             OrderBookEntry sale{ask.price, 0, timestamp, 
                 product, 
                 OrderBookType::asksale};
@@ -210,8 +215,7 @@ std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::string product, std:
 
 
     //             if bid.amount < ask.amount # bid is completely gone, slice the ask
-                if (bid.amount < ask.amount && 
-                   bid.amount > 0)
+                if (bid.amount > 0)
                 {
     //                 sale.amount = bid.amount
                     sale.amount = bid.amount;
@@ -223,12 +227,10 @@ std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::string product, std:
                     ask.amount = ask.amount - bid.amount;
     //                 bid.amount = 0 # make sure the bid is not processed again
                     bid.amount = 0;
-    //                 # some ask remains so go to the next bid
-    //                 continue
-                    continue;
                 }
             }
-        }
+            bids_queue.pop();// if reached this point bid.amount=0 move to next bid
+        };
     }
     return sales;             
 }
